@@ -116,6 +116,12 @@ listapregunta = [
         "id": 44,
         "Pregunta?": "¿Te sientes diferente o aislado de los demás?",
         "Respueta": "Si / No",
+        "Categoria": 4,       
+    },
+    {
+        "id": 45,
+        "Pregunta?": "¿**Te sientes diferente o aislado de los demás?", # modifica anderson
+        "Respueta": "Si / No",
         "Categoria": 4       
     }
 ]
