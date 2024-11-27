@@ -1,152 +1,79 @@
-from fastapi import FastAPI 
-from fastapi import FastAPI,Query # Importamos la libreria FastAPI
-from fastapi.responses import JSONResponse # Importamos la libreria JSONResponse
-from fastapi.responses import HTMLResponse
-from typing import Optional
-import nltk # Importamos la libreria Optional para volver parametros opcionales
+from fastapi import FastAPI, HTTPException
+from pydantic import BaseModel
+import random
 
-app = FastAPI() #Crea una instancia de la clase FastAPI 
-app.title = "App Categorización de Trastornos de Espectro Autista con FastAPI - Javier, Nelson, Anderson, Luis"
-app.version = "0.0.1"
+app = FastAPI()
 
-listapregunta = [
-    {
-        "id": 11,
-        "Pregunta?": "¿Te cuesta interpretar las señales sociales no verbales, como el lenguaje corporal o el tono de voz?",
-        "Respueta": "Si / No",
-        "Categoria": 1,       
+# Diccionario de categorías con palabras clave y respuestas
+categorias = {
+    "saludo": {
+        "palabras_claves": ["hola", "buenos dias", "buenas tardes", "buenas noches", "como esta?"],
+        "respuestas": ["Hola, bienvenido a tu asistente virtual del TEA", "¡Hola! ¿En qué puedo ayudarte?", "¡Bienvenido! Espero que tengas un gran día."]
     },
-    {
-        "id": 12,
-        "Pregunta?": "¿Prefieres actividades solitarias o en grupos pequeños?",
-        "Respueta": "Si / No",
-        "Categoria": 1,       
+    "despedida": {
+        "palabras_claves": ["adios", "chao", "hasta luego", "nos vemos", "bye", "que tengas un lindo dia", "que tengas una buena tarde", "feliz noche"],
+        "respuestas": ["Gracias por usar mi asistente virtual.", "Un gusto para mí ayudarte.", "Que tengas un buen día.", "Nos vemos pronto."]
     },
-    {
-        "id": 13,
-        "Pregunta?": "¿Tienes dificultades para iniciar o mantener conversaciones?",
-        "Respueta": "Si / No",
-        "Categoria": 1,       
-    },
-    {
-        "id": 14,
-        "Pregunta?": "¿Te resulta difícil entender las emociones de los demás y expresar las tuyas propias?",
-        "Respueta": "Si / No",
-        "Categoria": 1,       
-    },
-    {
-        "id": 15,
-        "Pregunta?": "¿A menudo te sientes incómodo en situaciones sociales o en grupos grandes?",
-        "Respueta": "Si / No",
-        "Categoria": 1,       
-    },
-    {
-        "id": 21,
-        "Pregunta?": "¿Tienes intereses intensos y duraderos en temas específicos?",
-        "Respueta": "Si / No",
-        "Categoria": 2,       
-    },
-    {
-        "id": 22,
-        "Pregunta?": "¿Sientes la necesidad de seguir rutinas o rituales muy específicos?",
-        "Respueta": "Si / No",
-        "Categoria": 2,       
-    },
-    {
-        "id": 23,
-        "Pregunta?": "¿Te molestan los cambios en tu entorno o en tus rutinas diarias?",
-        "Respueta": "Si / No",
-        "Categoria": 2,       
-    },
-    {
-        "id": 24,
-        "Pregunta?": "¿Tienes movimientos repetitivos, como balancearte o hacer clic con los dedos?",
-        "Respueta": "Si / No",
-        "Categoria": 2,       
-    },
-    {
-        "id": 25,
-        "Pregunta?": "¿Te sientes abrumado por ciertos estímulos sensoriales, como los ruidos fuertes o las luces brillantes?",
-        "Respueta": "Si / No",
-        "Categoria": 2,       
-    },
-    {
-        "id": 31,
-        "Pregunta?": "¿Tuviste dificultades en el desarrollo del lenguaje o del habla cuando eras niño?",
-        "Respueta": "Si / No",
-        "Categoria": 3,       
-    },
-    {
-        "id": 32,
-        "Pregunta?": "¿Te costaba hacer amigos o jugar con otros niños cuando eras pequeño?",
-        "Respueta": "Si / No",
-        "Categoria": 3,       
-    },
-    {
-        "id": 33,
-        "Pregunta?": "¿Tenías intereses inusuales o comportamientos repetitivos en la infancia?",
-        "Respueta": "Si / No",
-        "Categoria": 3,       
-    },
-    {
-        "id": 34,
-        "Pregunta?": "¿Has tenido dificultades en el ámbito laboral o académico debido a problemas de comunicación o interacción social?",
-        "Respueta": "Si / No",
-        "Categoria": 3,       
-    },
-    {
-        "id": 41,
-        "Pregunta?": "¿Tienes dificultades para entender el sarcasmo o el humor?",
-        "Respueta": "Si / No",
-        "Categoria": 4,       
-    },
-    {
-        "id": 42,
-        "Pregunta?": "¿Te cuesta seguir instrucciones complejas o multipasos?",
-        "Respueta": "Si / No",
-        "Categoria": 4,       
-    },
-    {
-        "id": 43,
-        "Pregunta?": "¿Tienes problemas para organizar tu tiempo o tus tareas?",
-        "Respueta": "Si / No",
-        "Categoria": 4,       
-    },
-    {
-        "id": 44,
-        "Pregunta?": "¿Te sientes diferente o aislado de los demás?",
-        "Respueta": "Si / No",
-        "Categoria": 4       
+    "motivacion": {
+        "palabras_claves": ["aconsejame", "necesito ayuda", "motivame", "me gustaria saber"],
+        "respuestas": [
+            "Ser diferente es ser único, y eso es algo hermoso.",
+            "El mundo necesita tu forma especial de pensar y ser.",
+            "Puedes lograr grandes cosas a tu propio ritmo.",
+            "No te rindas, cada paso cuenta."
+        ]
     }
-]
+}
 
-@app.get('/', tags=["Home"])#Definimos una ruta
-def message(): # Definimos una función de la ruta
-    return HTMLResponse ('<h1>Categorizacion de Trastornos de Espectro Autista</h1>') # Devolvemos un string en la respuesta de la ruta
+# Modelo de entrada del usuario
+class UserInput(BaseModel):
+    mensaje: str
+    cantidad_respuestas: int = 1  # Opcional: cuántas respuestas se generarán (valor predeterminado: 1)
 
-@app.get('/categoria', tags=["Categoria"])#Definimos una ruta de la clase FastAPI
-def get_listapregunta(): 
-    return listapregunta
 
-@app.get('/categoria/{id}', tags=["Categoria"])#Definimos una ruta de la clase FastAPI
-def get_lista_pregunta(id: int):
-    for item in listapregunta:
-        if item['id'] == id:
-            return item
-    return []
+@app.get("/")
+def home():
+    return {"mensaje": "Bienvenidos al Proyecto TEA for Luisfer-javi-nelson-anderson-jorge-neiver-valentina"}
 
-#Tokenizar
-@app.post("/tokenizar") # Decorador para indicar que es una ruta de la API
-def tokenize(text:str): # Funcion que retorna un mensaje
-    return preprocessar(text)
 
-def preprocessar(text):
-    import json  # Importamos la librería json para trabajar con archivos json
-    from nltk.tokenize import word_tokenize
-    import nltk
-    nltk.download('punkt')
-    tokens = word_tokenize(text)
-    result = {word: True for word in tokens}
-    print(result)
-    return JSONResponse(content={"message":result})
-    
+@app.get("/favicon.ico")
+def favicon():
+    return {}
+
+
+@app.post("/responder")
+def responder(input: UserInput):
+    # Convertimos el mensaje del usuario a minúsculas para evitar problemas de coincidencia
+    mensaje = input.mensaje.lower()
+    categorias_detectadas = []
+
+    # Identificar categorías presentes en el mensaje
+    for categoria, datos in categorias.items():
+        for palabra_clave in datos["palabras_claves"]:
+            if palabra_clave in mensaje:
+                categorias_detectadas.append(categoria)
+                break  # Salimos del bucle interno para evitar duplicados dentro de la misma categoría
+
+    if categorias_detectadas:
+        # Generar respuestas combinadas
+        respuestas_generadas = []
+        for _ in range(input.cantidad_respuestas):
+            respuesta_combinada = []
+            for categoria in categorias_detectadas:
+                respuesta_combinada.append(random.choice(categorias[categoria]["respuestas"]))
+            respuestas_generadas.append(" ".join(respuesta_combinada))
+        return {"respuestas": respuestas_generadas}
+
+    # Si no se encuentra ninguna categoría
+    raise HTTPException(status_code=404, detail="No se encontró una respuesta adecuada para tu mensaje.")
+
+
+# Buscar palabras clave y respuestas de una categoría específica
+@app.get("/categoria/{nombre_categoria}")
+def buscar_categoria(nombre_categoria: str):
+    nombre_categoria = nombre_categoria.lower()
+    # Verificamos si la categoría existe en el diccionario
+    if nombre_categoria in categorias:
+        return categorias[nombre_categoria]
+    else:
+        raise HTTPException(status_code=404, detail=f"La categoría '{nombre_categoria}' no fue encontrada.")
