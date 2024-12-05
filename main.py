@@ -10,6 +10,8 @@ import time
 
 # Inicializar la aplicación FastAPI
 app = FastAPI()
+app.title = "Bienvenido al asistente virtual TEABot → for Luisfer-Javi-Nelson-Anderson-Jorge-Neiver-valentina"
+app.version = "[ Ver → 1.0 ]"
 
 # **1. Configuración inicial de categorías y dataset**
 # Diccionario de categorías: define palabras clave y respuestas automáticas para cada categoría.
@@ -413,4 +415,4 @@ def prueba_frecuencia_palabras(texto: str):
 # **9. Verificación del funcionamiento del servicio**
 @app.get("/")
 def home():
-    return {"mensaje": "Bienvenido al asistente virtual TEA mejorado."}
+    return {"mensaje": "Bienvenido al asistente virtual TEABot → for Luisfer-Javi-Nelson-Anderson-Jorge-Neiver-valentina"}
