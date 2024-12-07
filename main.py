@@ -1,3 +1,7 @@
+import tkinter 
+tkinter.Tk().withdraw()  
+
+import threading 
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 from typing import List
@@ -5,27 +9,29 @@ from sklearn.feature_extraction.text import CountVectorizer
 from sklearn.naive_bayes import MultinomialNB
 import random
 from collections import Counter
-import schedule
-import time
+import spacy
+from textblob import TextBlob
+
+nlp = spacy.load("es_core_news_md")
+
 
 # Inicializar la aplicación FastAPI
 app = FastAPI()
 app.title = "Bienvenido al asistente virtual TEABot → for Luisfer-Javi-Nelson-Anderson-Jorge-Neiver-valentina"
 app.version = "[ Ver → 1.0 ]"
-
 # **1. Configuración inicial de categorías y dataset**
 # Diccionario de categorías: define palabras clave y respuestas automáticas para cada categoría.
 categorias = {
     "saludo": {
         "palabras_claves": ["hola", "Hola!", "Hey!", "Qué tal?", "Cómo va?", "Quiubo?", "Hola de nuevo", "Me alegra verte de nuevo", "", "buenos dias", "buenas tardes", "buenas noches", "como estas?"],
-        "respuestas": ["Hola, bienvenido a tu asistente virtual del TEA.", "¡Bienvenido! Espero que tengas un gran día.", "¡Hola! ¿En qué puedo ayudarte hoy?", "¡Hey! ¿Cómo te va?", "¡Hola! Estoy listo para responder a tus preguntas."]
+        "respuestas": ["Hola, bienvenido a tu asistente virtual del TEA."]
     },
     "despedida": {
         "palabras_claves": ["adios", "chao", "hasta luego", "nos vemos", "bye"],
-        "respuestas": ["Gracias por usar mi asistente virtual.", "Un gusto para mí ayudarte.", "Que tengas un buen día."]
+        "respuestas": ["Gracias por usar mi asistente virtual."]
     },
     "motivacion": {
-        "palabras_claves": ["aconsejame", "necesito ayuda", "motivame", "me gustaria saber", "qué puedo hacer bien", "mis habilidades", "me siento diferente", "soy diferente", "en qué soy bueno"],
+        "palabras_claves": ["aconsejame", "necesito ayuda", "motivame", "qué puedo hacer bien", "me siento diferente", "soy diferente", "en qué soy bueno"],
         "respuestas": [
             "Ser diferente es ser único, y eso es algo hermoso.",
             "El mundo necesita tu forma especial de pensar y ser.",
@@ -38,7 +44,7 @@ categorias = {
         ]
     },
     "estrategias": {
-        "palabras_claves": ["estrategias", "como puedo ayudarme", "metodos para mejorar", "me cuesta socializar", "me siento incomprendido", "tengo ansiedad", "me siento abrumado", "no sé cómo manejar mis emociones", "socializar", "conversar", "interacción social", "hacer amigos", "entender a los demás", "frustración", "ira", "tristeza", "autocontro", "aprendizaje", "estudiar", "concentrarse", "atención", "memoria", "comprensión"],
+        "palabras_claves": ["estrategias", "como puedo ayudarme", "metodos para mejorar", "me cuesta socializar", "me siento incomprendido","me siento abrumado", "no sé cómo manejar mis emociones", "socializar", "conversar", "interacción social", "hacer amigos", "entender a los demás", "frustración", "ira", "tristeza", "autocontro", "aprendizaje", "estudiar", "concentrarse", "atención", "memoria", "comprensión"],
         "respuestas": [
             "Crear rutinas es clave para avanzar.",
             "Busca apoyo en un terapeuta especializado.",
@@ -68,7 +74,7 @@ categorias = {
         ]
     },
     "emociones": {
-        "palabras_claves": ["emociones", "como manejo mis sentimientos", "tristeza", "ansiedad", "no me acepto", "me siento mal conmigo mismo", "no me gusto", "tengo baja autoestima", "mis sueños", "mis metas", "qué quiero lograr", "cómo alcanzar mis metas", "mi futuro",],
+        "palabras_claves": ["emociones", "como manejo mis sentimientos", "tristeza",  "tengo ansiedad", "no me acepto", "me siento mal conmigo mismo", "no me gusto", "tengo baja autoestima", "mis sueños", "mis metas", "qué quiero lograr", "cómo alcanzar mis metas", "mi futuro",],
         "respuestas": [
             "Hablar sobre tus emociones puede ayudarte a procesarlas.",
             "Intenta ejercicios de respiración para relajarte.",
@@ -136,7 +142,7 @@ categorias = {
         ]
     },
     "barreras_sensoriales": {
-        "palabras_claves": ["barreras sensoriales", "sensibilidad sensorial", "sobrecarga sensorial", "ruido", "luces", "texturas", "olores", "ansiedad sensorial"],
+        "palabras_claves": ["sonidos fuertes", "sensibilidad sensorial", "mucho ruido", "ruido", "luces", "texturas", "olores", "ansiedad sensorial"],
         "respuestas": [
             "Las barreras sensoriales pueden causar malestar o sobrecarga sensorial.",
             "Es importante identificar tus necesidades sensoriales y buscar adaptaciones.",
@@ -150,7 +156,7 @@ categorias = {
         ]
     },
     "barreras_organizacionales": {
-        "palabras_claves": ["barreras organizacionales", "entorno laboral", "adaptaciones laborales"],
+        "palabras_claves": ["organizacionales", "entorno laboral", "adaptaciones laborales"],
         "respuestas": [
             "Las barreras organizacionales pueden dificultar la adaptación al entorno laboral.",
             "Es importante buscar empresas que ofrezcan adaptaciones y flexibilidad."
@@ -208,37 +214,42 @@ model = MultinomialNB()
 # Dataset inicial que contiene ejemplos representativos de cada categoría.
 dataset = {
     "saludo": [
-        "hola", "buenos dias", "como estas",  # Frases básicas
-        "hola!", "hey!", "qué tal?",  # Frases informales
+        "hola", "buenos días", "¿cómo estás?",  # Frases básicas
+        "hola!", "hey!", "¿qué tal?",  # Frases informales
         "buenas tardes", "buenas noches",  # Saludos con hora
         "hola de nuevo", "me alegra verte",  # Repetición
-        "¿qué me cuentas?", "¿cómo te encuentras hoy?"  # Variaciones
+        "¿qué me cuentas?", "¿cómo te encuentras hoy?",  # Variaciones
+        "¿Cómo estás?", "¿Qué hay de nuevo?", "¿Cómo te va?",  # Variaciones adicionales
+        "Hola, ¿qué tal?", "Buenos días, ¿cómo amaneciste?"  # Saludos más elaborados
     ],
     "despedida": [
-        "adios", "chao", "hasta luego",  # Despedidas comunes
-        "nos vemos", "bye", "hasta pronto"  # Variaciones
+        "adiós", "chao", "hasta luego",  # Despedidas comunes
+        "nos vemos", "bye", "hasta pronto",  # Variaciones
+        "cuídate", "que te vaya bien", "hasta la próxima"  # Despedidas más elaboradas
     ],
     "motivacion": [
-        "necesito motivación", "aconsejame", "quiero ánimos",  # Solicitud de motivación
-        "soy diferente", "mis habilidades",  # Autoconocimiento
-        "qué puedo hacer bien", "en qué soy bueno",  # Fortalezas
-        "me siento diferente", "soy diferente"  # Dudas sobre la diferencia
+        "necesito motivación", "me siento desmotivado", "dame consejos",  # Solicitud de motivación
+        "mis habilidades", "mis fortalezas", "en qué soy bueno",  # Autoconocimiento
+        "me siento diferente", "no sé qué hacer con mi vida",  # Dudas e inseguridades
+        "quiero superarme", "quiero lograr mis metas",  # Aspiraciones
+        "cómo puedo mejorar", "cómo puedo ser exitoso"  # Búsqueda de desarrollo
     ],
     "estrategias": [
-        "estrategias para la vida diaria", "como puedo ayudarme",  # Solicitud de estrategias
-        "metodos para mejorar", "me cuesta socializar",  # Dificultades sociales
+        "estrategias para la vida diaria", "cómo puedo mejorar",  # Solicitud de estrategias
+        "me cuesta socializar", "tengo problemas para comunicarme",  # Dificultades sociales
         "me siento incomprendido", "tengo ansiedad", "me siento abrumado",  # Ansiedad y emociones
-        "no sé cómo manejar mis emociones", "socializar", "conversar",  # Habilidades sociales
-        "interacción social", "hacer amigos", "entender a los demás",  # Relaciones
-        "frustración", "ira", "tristeza", "autocontrol",  # Manejo emocional
-        "aprendizaje", "estudiar", "concentrarse", "atención", "memoria", "comprensión"  # Aprendizaje
+        "no sé cómo manejar mis emociones", "cómo controlar mis emociones",  # Manejo emocional
+        "cómo hacer amigos", "cómo entender a los demás",  # Relaciones interpersonales
+        "aprendizaje", "estudiar", "concentrarse", "atención", "memoria",  # Aprendizaje
+        "cómo puedo aprender mejor", "técnicas de estudio",  # Estrategias de aprendizaje
+        "cómo puedo ser más organizado", "cómo puedo gestionar mi tiempo"  # Organización y gestión del tiempo
     ],
     "emociones": [
-        "emociones", "como manejo mis sentimientos",  # Manejo emocional
-        "tristeza", "ansiedad", "no me acepto",  # Emociones negativas
-        "me siento mal conmigo mismo", "no me gusto",  # Autoestima
-        "tengo baja autoestima", "mis sueños", "mis metas",  # Metas y aspiraciones
-        "qué quiero lograr", "cómo alcanzar mis metas", "mi futuro"  # Planificación
+        "emociones", "sentimientos", "cómo manejar mis emociones",  # Manejo emocional
+        "tristeza", "ansiedad", "miedo", "ira", "frustración",  # Emociones específicas
+        "no me acepto", "me siento mal conmigo mismo", "tengo baja autoestima",  # Autoestima
+        "mis sueños", "mis metas", "qué quiero lograr", "cómo alcanzar mis metas",  # Metas y aspiraciones
+        "mi futuro", "cómo puedo ser feliz", "cómo puedo sentirme mejor"  # Planificación
     ],
     "familiares": [
         "mi hijo tiene TEA", "ayuda para familiares",  # Apoyo familiar
@@ -326,6 +337,8 @@ def expand_dataset(original_dataset):
 # Ampliar el dataset con datos adicionales.
 dataset = expand_dataset(dataset)
 
+
+
 # **5. Entrenamiento del modelo Naive Bayes**
 @app.post("/train")
 def train_model():
@@ -341,9 +354,10 @@ def train_model():
     model.fit(X, all_labels)
 
     # Verificar si el vocabulario se ha creado correctamente (opcional)
-    if not vectorizer.vocabulary:  # Corrección aquí también
+    if len(vectorizer.vocabulary_) == 0:  # Verificar si el diccionario está vacío
         print("Error: El vocabulario no se ha creado correctamente.")
 
+    # Devolver una respuesta indicando que el modelo se ha entrenado exitosamente.
     return {"message": "Modelo entrenado exitosamente."}
 
 # Entrenar el modelo al iniciar la aplicación
@@ -416,3 +430,17 @@ def prueba_frecuencia_palabras(texto: str):
 @app.get("/")
 def home():
     return {"mensaje": "Bienvenido al asistente virtual TEABot → for Luisfer-Javi-Nelson-Anderson-Jorge-Neiver-valentina"}
+
+# **10.Función para mostrar la GUI con el cuadro de preguntas**def ejecutar_gui():
+def ejecutar_gui(texto_pregunta):
+    import gui  # Importa el archivo gui.py que contiene el código de la GUI
+    print("GUI iniciada en un hilo separado.")
+
+# **Modificar la ruta /predict**
+@app.post("/predict")
+def predict(input: UserInput):
+    # Crear un hilo para ejecutar la GUI
+    hilo_gui = threading.Thread(target=ejecutar_gui, args=(input.mensaje,)) 
+    hilo_gui.start()
+
+    return {"mensaje": "Procesando pregunta..."}
